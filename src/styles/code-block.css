@@ -1,0 +1,413 @@
+/*
+ * @file src/styles/code-block.css
+ * @description 统一 IR 与 WYSIWYG 模式下代码块编辑态与预览态一致的双层叠加高亮、行号条及语言胶囊外观
+ * @module 全局样式架构
+ */
+.vditor-ir__node[data-type="code-block"],
+.vditor-wysiwyg__block[data-type="code-block"] {
+  position: relative !important;
+  margin: 16px 0 !important;
+  border-radius: 8px !important;
+  padding-bottom: 42px !important;
+  transition: border-color 0.15s ease !important;
+}
+
+html.dark .vditor-ir__node[data-type="code-block"],
+html.dark .vditor-ir__node--expand[data-type="code-block"],
+html.dark .vditor-wysiwyg__block[data-type="code-block"] {
+  background-color: #202127 !important;
+  border: 1px solid #3f3f46 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+html:not(.dark) .vditor-ir__node[data-type="code-block"],
+html:not(.dark) .vditor-ir__node--expand[data-type="code-block"],
+html:not(.dark) .vditor-wysiwyg__block[data-type="code-block"] {
+  background-color: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Remove wrapping backticks & ugly WYSIWYG gutter markers (</>) */
+.vditor-ir__node[data-type="code-block"]::before,
+.vditor-ir__node[data-type="code-block"]::after,
+.vditor-ir__node--expand[data-type="code-block"]::before,
+.vditor-ir__node--expand[data-type="code-block"]::after,
+.vditor-ir__node[data-type="code-block"] [data-type="code-block-open-marker"],
+.vditor-ir__node[data-type="code-block"] [data-type="code-block-close-marker"],
+.vditor-wysiwyg div.vditor-wysiwyg__block::before {
+  display: none !important;
+  content: "" !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  pointer-events: none !important;
+}
+
+/* Bottom-right Language Selector Pill (IR & WYSIWYG) */
+.vditor-ir__node[data-type="code-block"] [data-type="code-block-info"],
+.vditor-ir__node:not(.vditor-ir__node--expand)[data-type="code-block"] [data-type="code-block-info"],
+.vditor-ir__node--expand[data-type="code-block"] [data-type="code-block-info"],
+.vditor-wysiwyg__block[data-type="code-block"][data-code-lang]::after {
+  position: absolute !important;
+  right: 14px !important;
+  bottom: 9px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 24px !important;
+  line-height: 1 !important;
+  width: auto !important;
+  min-width: 48px !important;
+  max-width: 240px !important;
+  overflow: visible !important;
+  padding: 0 10px !important;
+  box-sizing: border-box !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: lowercase !important;
+  border-radius: 5px !important;
+  cursor: pointer !important;
+  z-index: 30 !important;
+  opacity: 0.95 !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+  user-select: text !important;
+  letter-spacing: 0.5px !important;
+  outline: none !important;
+}
+
+.vditor-wysiwyg__block[data-type="code-block"][data-code-lang]::after {
+  content: attr(data-code-lang) !important;
+  pointer-events: none !important;
+}
+
+html.dark .vditor-ir__node[data-type="code-block"] [data-type="code-block-info"],
+html.dark .vditor-ir__node:not(.vditor-ir__node--expand)[data-type="code-block"] [data-type="code-block-info"],
+html.dark .vditor-ir__node--expand[data-type="code-block"] [data-type="code-block-info"],
+html.dark .vditor-wysiwyg__block[data-type="code-block"][data-code-lang]::after {
+  color: #38bdf8 !important;
+  background-color: rgba(56, 189, 248, 0.12) !important;
+  border: 1px solid rgba(56, 189, 248, 0.35) !important;
+}
+
+html.dark .vditor-ir__node[data-type="code-block"]:hover [data-type="code-block-info"],
+html.dark .vditor-ir__node--expand[data-type="code-block"] [data-type="code-block-info"],
+html.dark .vditor-ir__node[data-type="code-block"] [data-type="code-block-info"]:focus {
+  opacity: 1 !important;
+  background-color: rgba(56, 189, 248, 0.22) !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+  outline: none !important;
+}
+
+.vditor-ir__node[data-type="code-block"] [data-type="code-block-info"]:empty::before {
+  content: '输入语言...' !important;
+  color: #71717a !important;
+  font-weight: normal !important;
+  font-style: italic !important;
+}
+
+html:not(.dark) .vditor-ir__node[data-type="code-block"] [data-type="code-block-info"],
+html:not(.dark) .vditor-ir__node:not(.vditor-ir__node--expand)[data-type="code-block"] [data-type="code-block-info"],
+html:not(.dark) .vditor-ir__node--expand[data-type="code-block"] [data-type="code-block-info"],
+html:not(.dark) .vditor-wysiwyg__block[data-type="code-block"][data-code-lang]::after {
+  color: #0284c7 !important;
+  background-color: #e0f2fe !important;
+  border: 1px solid #bae6fd !important;
+}
+
+html:not(.dark) .vditor-ir__node[data-type="code-block"]:hover [data-type="code-block-info"],
+html:not(.dark) .vditor-ir__node--expand[data-type="code-block"] [data-type="code-block-info"],
+html:not(.dark) .vditor-ir__node[data-type="code-block"] [data-type="code-block-info"]:focus {
+  background-color: #bae6fd !important;
+  border-color: #0284c7 !important;
+  color: #0369a1 !important;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.2) !important;
+}
+
+/* WYSIWYG block floating toolbar */
+.vditor-wysiwyg .vditor-panel.vditor-panel--none {
+  background-color: rgba(32, 33, 39, 0.95) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid #3f3f46 !important;
+  border-radius: 7px !important;
+  padding: 2px 6px !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45) !important;
+  transform: translateY(2px) scale(0.84) !important;
+  transform-origin: left top !important;
+  color: #e4e4e7 !important;
+  z-index: 40 !important;
+}
+
+html:not(.dark) .vditor-wysiwyg .vditor-panel.vditor-panel--none {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12) !important;
+  color: #18181b !important;
+}
+
+.vditor-wysiwyg .vditor-panel.vditor-panel--none .vditor-input {
+  background-color: #18181b !important;
+  color: #38bdf8 !important;
+  border: 1px solid #3f3f46 !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+}
+
+html:not(.dark) .vditor-wysiwyg .vditor-panel.vditor-panel--none .vditor-input {
+  background-color: #f1f5f9 !important;
+  color: #0284c7 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Unified Code Block Grid Overlay (Regular Code Blocks: IR & WYSIWYG) */
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special),
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > .vditor-ir__preview,
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > pre.vditor-ir__marker--pre,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > .vditor-wysiwyg__preview,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child {
+  grid-row: 1 !important;
+  grid-column: 1 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 14px 16px 0 16px !important;
+  background: transparent !important;
+  border: none !important;
+  box-sizing: border-box !important;
+}
+
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > .vditor-ir__preview,
+.vditor-ir__node--expand[data-type="code-block"]:not(.mf-code-special) > .vditor-ir__preview,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > .vditor-wysiwyg__preview {
+  display: block !important;
+  position: static !important;
+  z-index: auto !important;
+}
+
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > .vditor-ir__preview {
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child:not([style*="none"]) ~ .vditor-wysiwyg__preview {
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > pre.vditor-ir__marker--pre,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child {
+  display: block !important;
+  position: relative !important;
+  z-index: 2 !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child[style*="none"] {
+  display: none !important;
+}
+
+.vditor-ir__node[data-type="code-block"] pre,
+.vditor-wysiwyg__block[data-type="code-block"] pre {
+  margin: 0 !important;
+  padding: 14px 16px 0 16px !important;
+  background: transparent !important;
+  border: none !important;
+  font-family: var(--font-mono) !important;
+  font-size: 13.5px !important;
+  line-height: 1.65 !important;
+}
+
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > pre.vditor-ir__marker--pre > code,
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > .vditor-ir__preview > code,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child > code,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > .vditor-wysiwyg__preview > code {
+  display: block !important;
+  margin: 0 !important;
+  padding: 1em 1em 1em 4em !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 13.5px !important;
+  line-height: 1.65 !important;
+  letter-spacing: normal !important;
+  font-variant-ligatures: none !important;
+  tab-size: 4 !important;
+  white-space: pre !important;
+  word-break: initial !important;
+  word-wrap: normal !important;
+  overflow-x: auto !important;
+  box-sizing: border-box !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+html.dark .vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > pre.vditor-ir__marker--pre > code,
+html.dark .vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child > code {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: #38bdf8 !important;
+}
+
+html:not(.dark) .vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > pre.vditor-ir__marker--pre > code,
+html:not(.dark) .vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child > code {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: #0284c7 !important;
+}
+
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > pre.vditor-ir__marker--pre > code::selection,
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > pre.vditor-ir__marker--pre > code *::selection,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child > code::selection,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > pre:first-child > code *::selection {
+  background-color: rgba(56, 189, 248, 0.28) !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+.vditor-ir__node[data-type="code-block"]:not(.mf-code-special) > .vditor-ir__preview > code::-webkit-scrollbar-thumb,
+.vditor-wysiwyg__block[data-type="code-block"]:not(.mf-code-special) > .vditor-wysiwyg__preview > code::-webkit-scrollbar-thumb {
+  background: transparent !important;
+}
+
+html.dark .vditor-ir__node[data-type="code-block"].mf-code-special code,
+html.dark .vditor-ir__node[data-type="code-block"] .vditor-ir__preview code,
+html.dark .vditor-wysiwyg__block[data-type="code-block"] .vditor-wysiwyg__preview code {
+  color: #f4f4f5 !important;
+  background: transparent !important;
+  font-family: var(--font-mono) !important;
+}
+
+html:not(.dark) .vditor-ir__node[data-type="code-block"].mf-code-special code,
+html:not(.dark) .vditor-ir__node[data-type="code-block"] .vditor-ir__preview code,
+html:not(.dark) .vditor-wysiwyg__block[data-type="code-block"] .vditor-wysiwyg__preview code {
+  color: #1e293b !important;
+  background: transparent !important;
+  font-family: var(--font-mono) !important;
+}
+
+/* Zero-Jitter Copy Button */
+.vditor-copy {
+  position: absolute !important;
+  top: 10px !important;
+  right: 14px !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 0 !important;
+  border: none !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+  z-index: 25 !important;
+  display: none;
+}
+
+.vditor-reset pre:hover div.vditor-copy,
+[data-type="code-block"]:hover div.vditor-copy {
+  display: block !important;
+  position: absolute !important;
+  top: 10px !important;
+  right: 14px !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.vditor-copy span {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  cursor: pointer !important;
+  padding: 4px 6px !important;
+  border-radius: 4px !important;
+  background: rgba(32, 33, 39, 0.95) !important;
+  border: 1px solid #3f3f46 !important;
+  color: #a1a1aa !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+}
+
+.vditor-copy span:hover {
+  color: #38bdf8 !important;
+  border-color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.15) !important;
+}
+
+html:not(.dark) .vditor-copy span {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #64748b !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+}
+
+html:not(.dark) .vditor-copy span:hover {
+  color: #0284c7 !important;
+  border-color: #0284c7 !important;
+  background: #f0f9ff !important;
+}
+
+.vditor-copy svg {
+  width: 13px !important;
+  height: 13px !important;
+  fill: currentColor !important;
+}
+
+.vditor-ir__node--expand.mf-code-special .vditor-ir__preview,
+.vditor-wysiwyg__block.mf-code-special > pre:first-child:not([style*="none"]) ~ .vditor-wysiwyg__preview {
+  display: none !important;
+}
+
+/* Pure Source Code Mode (.vditor-sv) */
+.vditor-sv {
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  line-height: 1.7 !important;
+  padding: 20px clamp(28px, 3.5vw, 48px) max(380px, 75vh) clamp(28px, 3.5vw, 48px) !important;
+}
+
+html.dark .vditor-sv {
+  background-color: var(--bg-canvas) !important;
+  color: #e4e4e7 !important;
+}
+
+html:not(.dark) .vditor-sv {
+  background-color: var(--bg-canvas) !important;
+  color: #18181b !important;
+}
+
+/* Line Numbers */
+.vditor-linenumber__rows {
+  top: 1em !important;
+  left: 0 !important;
+  width: 3em !important;
+  line-height: 1.65 !important;
+}
+
+html.dark .vditor-linenumber__rows {
+  border-right: 1px solid #3f3f46 !important;
+  color: #71717a !important;
+  font-family: var(--font-mono) !important;
+}
+
+html:not(.dark) .vditor-linenumber__rows {
+  border-right: 1px solid #e2e8f0 !important;
+  color: #94a3b8 !important;
+  font-family: var(--font-mono) !important;
+}

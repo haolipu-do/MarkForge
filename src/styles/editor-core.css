@@ -1,0 +1,342 @@
+/*
+ * @file src/styles/editor-core.css
+ * @description 正文 Markdown 排版核心样式：100% 满宽表格、专注/打字机模式、源码模式文本域及公式/引用卡片渲染
+ * @module 全局样式架构
+ */
+/* Table High-Contrast Sharp Styling (Default 100% Full Width) */
+.vditor-reset table {
+  display: table !important;
+  width: 100% !important;
+  table-layout: auto !important;
+  word-break: normal !important;
+}
+
+.vditor-reset th,
+.vditor-reset td {
+  white-space: normal !important;
+  word-break: break-word !important;
+}
+
+.vditor-reset th code,
+.vditor-reset td code,
+.vditor-reset th code:not(pre code),
+.vditor-reset td code:not(pre code) {
+  white-space: nowrap !important;
+}
+
+html.dark .vditor-reset table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 16px 0 !important;
+  border: 1px solid var(--border-strong) !important;
+  background-color: #1a1a20 !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+}
+
+html.dark .vditor-reset th,
+html.dark .vditor-reset td {
+  border: 1px solid var(--border-subtle) !important;
+  padding: 8px 14px !important;
+  color: var(--text-primary) !important;
+}
+
+html.dark .vditor-reset th {
+  background-color: #24242c !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+html.dark .vditor-reset tr:nth-child(even) td {
+  background-color: #16161b !important;
+}
+
+html.dark .vditor-reset td:focus,
+html.dark .vditor-reset th:focus {
+  outline: 2px solid #38bdf8 !important;
+  outline-offset: -2px !important;
+  background-color: rgba(56, 189, 248, 0.12) !important;
+}
+
+html:not(.dark) .vditor-reset table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 16px 0 !important;
+  border: 1px solid #cbd5e1 !important;
+  background-color: #ffffff !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+}
+
+html:not(.dark) .vditor-reset th,
+html:not(.dark) .vditor-reset td {
+  border: 1px solid #e2e8f0 !important;
+  padding: 8px 14px !important;
+  color: #1e293b !important;
+}
+
+html:not(.dark) .vditor-reset th {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark) .vditor-reset tr:nth-child(even) td {
+  background-color: #f8fafc !important;
+}
+
+html:not(.dark) .vditor-reset td:focus,
+html:not(.dark) .vditor-reset th:focus {
+  outline: 2px solid #0284c7 !important;
+  outline-offset: -2px !important;
+  background-color: rgba(2, 132, 199, 0.08) !important;
+}
+
+/* Generous Content Width & Overscroll (No text clipping) */
+.vditor-reset {
+  padding-left: clamp(28px, 3.5vw, 48px) !important;
+  padding-right: clamp(28px, 3.5vw, 48px) !important;
+  padding-bottom: max(380px, 75vh) !important;
+  line-height: 1.75 !important;
+  font-family: var(--font-family) !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.vditor-reset > p,
+.vditor-ir__node:not([data-type="code-block"]) p {
+  line-height: 1.75 !important;
+  margin: 10px 0 !important;
+  overflow: visible !important;
+}
+
+/* Vditor Dark / Light Mode Overrides */
+html.dark .vditor,
+html:not(.dark) .vditor {
+  border: none !important;
+  background-color: var(--bg-canvas) !important;
+}
+
+html.dark .vditor-toolbar,
+html:not(.dark) .vditor-toolbar {
+  background-color: var(--bg-header) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+html.dark .vditor-toolbar__item button {
+  color: var(--text-muted) !important;
+}
+
+html.dark .vditor-toolbar__item button:hover {
+  color: var(--text-primary) !important;
+  background-color: var(--bg-hover) !important;
+}
+
+html.dark .vditor-reset,
+html:not(.dark) .vditor-reset {
+  color: var(--text-primary) !important;
+  background-color: var(--bg-canvas) !important;
+}
+
+html.dark .vditor-reset h1,
+html.dark .vditor-reset h2,
+html.dark .vditor-reset h3,
+html.dark .vditor-reset h4,
+html:not(.dark) .vditor-reset h1,
+html:not(.dark) .vditor-reset h2,
+html:not(.dark) .vditor-reset h3,
+html:not(.dark) .vditor-reset h4 {
+  color: var(--text-heading) !important;
+  font-weight: 600 !important;
+}
+
+html.dark .vditor-reset h1,
+html:not(.dark) .vditor-reset h1 {
+  border-bottom: 1px solid var(--border-subtle) !important;
+  padding-bottom: 8px !important;
+}
+
+html.dark .vditor-reset h2,
+html:not(.dark) .vditor-reset h2 {
+  border-bottom: 1px solid var(--border-subtle) !important;
+  padding-bottom: 6px !important;
+}
+
+/* Inline Code (`code:not(pre code)`) */
+html.dark .vditor-reset code:not(pre code) {
+  background-color: #27273a !important;
+  color: #f472b6 !important;
+  border: 1px solid #3f3f46 !important;
+  font-family: var(--font-mono) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+}
+
+html:not(.dark) .vditor-reset code:not(pre code) {
+  background-color: #f1f5f9 !important;
+  color: #0284c7 !important;
+  border: 1px solid #e2e8f0 !important;
+  font-family: var(--font-mono) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+}
+
+/* High Contrast Blockquotes & Callouts */
+html.dark .vditor-reset blockquote {
+  border-left: 4px solid var(--accent) !important;
+  background-color: rgba(56, 189, 248, 0.06) !important;
+  color: #e4e4e7 !important;
+  padding: 10px 16px !important;
+  border-radius: 0 6px 6px 0 !important;
+}
+
+html:not(.dark) .vditor-reset blockquote {
+  border-left: 4px solid #0284c7 !important;
+  background-color: #f0f9ff !important;
+  color: #1e293b !important;
+  padding: 10px 16px !important;
+  border-radius: 0 6px 6px 0 !important;
+}
+
+/* High Contrast Math (KaTeX) & Math Blocks */
+html.dark .vditor-ir__node[data-type="math-block"] .vditor-ir__marker--pre code {
+  color: #f4f4f5 !important;
+  font-family: var(--font-mono) !important;
+}
+html:not(.dark) .vditor-ir__node[data-type="math-block"] .vditor-ir__marker--pre code {
+  color: #1e293b !important;
+  font-family: var(--font-mono) !important;
+}
+html.dark .katex { color: #f8fafc !important; }
+html:not(.dark) .katex { color: #0f172a !important; }
+
+/* HTML & YAML Block Editing */
+html.dark .vditor-ir__node[data-type="html-block"] .vditor-ir__marker--pre code,
+html.dark .vditor-ir__node[data-type="yaml-front-matter"] .vditor-ir__marker--pre code {
+  color: #f4f4f5 !important;
+  font-family: var(--font-mono) !important;
+}
+html:not(.dark) .vditor-ir__node[data-type="html-block"] .vditor-ir__marker--pre code,
+html:not(.dark) .vditor-ir__node[data-type="yaml-front-matter"] .vditor-ir__marker--pre code {
+  color: #1e293b !important;
+  font-family: var(--font-mono) !important;
+}
+
+/* Horizontal Rule (`---`) */
+html.dark .vditor-reset hr {
+  border: none !important;
+  border-top: 1px solid #3f3f46 !important;
+  margin: 24px 0 !important;
+}
+
+html:not(.dark) .vditor-reset hr {
+  border: none !important;
+  border-top: 1px solid #e2e8f0 !important;
+  margin: 24px 0 !important;
+}
+
+/* Links */
+html.dark .vditor-reset a {
+  color: #38bdf8 !important;
+  text-decoration: none !important;
+}
+html.dark .vditor-reset a:hover {
+  text-decoration: underline !important;
+}
+
+html:not(.dark) .vditor-reset a {
+  color: #0284c7 !important;
+  text-decoration: none !important;
+}
+html:not(.dark) .vditor-reset a:hover {
+  text-decoration: underline !important;
+}
+
+/* Keyboard Keys (<kbd>) */
+html.dark .vditor-reset kbd {
+  background-color: #27272a !important;
+  color: #f4f4f5 !important;
+  border: 1px solid #3f3f46 !important;
+  box-shadow: 0 1px 0 #18181b !important;
+  font-family: var(--font-mono) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+}
+
+html:not(.dark) .vditor-reset kbd {
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 0 #cbd5e1 !important;
+  font-family: var(--font-mono) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+}
+
+/* Creative Modes */
+.typewriter-mode-active .vditor-reset {
+  padding-bottom: 55vh !important;
+  scroll-behavior: smooth;
+}
+
+.focus-mode-active .vditor-reset > *:not(.vditor-focus-block) {
+  opacity: 0.3 !important;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: blur(0.2px);
+}
+
+.focus-mode-active .vditor-reset > *.vditor-focus-block {
+  opacity: 1 !important;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: none;
+}
+
+.vditor-reset sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+  top: -0.5em;
+  color: #38bdf8;
+}
+
+.vditor-reset sub {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+  bottom: -0.25em;
+  color: #38bdf8;
+}
+
+.vditor-reset u {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(56, 189, 248, 0.6);
+}
+
+/* In-Editor Global Find Highlight API (Zero DOM mutation) */
+::highlight(mf-find-match) {
+  background-color: rgba(250, 204, 21, 0.35);
+  color: inherit;
+}
+
+html:not(.dark) ::highlight(mf-find-match) {
+  background-color: rgba(250, 204, 21, 0.55);
+  color: #0f172a;
+}
+
+::highlight(mf-find-active) {
+  background-color: rgba(56, 189, 248, 0.6);
+  color: #ffffff;
+}
+
+html:not(.dark) ::highlight(mf-find-active) {
+  background-color: rgba(2, 132, 199, 0.85);
+  color: #ffffff;
+}

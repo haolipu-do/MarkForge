@@ -1,0 +1,10 @@
+/*
+ * @file src/styles/index.css
+ * @description 应用全局样式总入口，按模块顺序汇聚主题变量、浮窗样式、编辑器正文排版、代码块及 Mermaid 图表样式
+ * @module 全局样式架构
+ */
+@import './tokens.css';
+@import './ui-popovers.css';
+@import './editor-core.css';
+@import './code-block.css';
+@import './mermaid.css';

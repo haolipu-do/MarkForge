@@ -1,0 +1,141 @@
+/*
+ * @file src/styles/mermaid.css
+ * @description Mermaid 与图表代码块专属渲染样式，修复 foreignObject 文字换行截断、节点对比度及箭头连线配色
+ * @module 全局样式架构
+ */
+.language-mermaid p,
+.language-mermaid div,
+.language-mermaid span,
+.vditor-ir__preview .language-mermaid p,
+.vditor-ir__preview .language-mermaid div,
+.vditor-ir__preview .language-mermaid span,
+.vditor-reset svg foreignObject p,
+.vditor-reset svg foreignObject div,
+.vditor-reset svg foreignObject span {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.5 !important;
+  box-sizing: border-box !important;
+}
+
+.language-mermaid foreignObject {
+  overflow: visible !important;
+}
+
+.vditor-ir__preview .language-mermaid {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: 16px 0 !important;
+  background: transparent !important;
+  overflow-x: auto !important;
+}
+
+.vditor-ir__preview .language-mermaid svg {
+  height: auto !important;
+  font-family: var(--font-family) !important;
+}
+
+/* Light Mode Clean Modern Mermaid Aesthetics */
+html:not(.dark) .language-mermaid .node rect,
+html:not(.dark) .language-mermaid .node polygon,
+html:not(.dark) .language-mermaid .node circle,
+html:not(.dark) .language-mermaid .node ellipse,
+html:not(.dark) .language-mermaid .node path {
+  fill: #ffffff !important;
+  stroke: #0284c7 !important;
+  stroke-width: 1.75px !important;
+}
+
+html:not(.dark) .language-mermaid .node .label,
+html:not(.dark) .language-mermaid .node span,
+html:not(.dark) .language-mermaid .node p,
+html:not(.dark) .language-mermaid .node text,
+html:not(.dark) .language-mermaid .cluster-label text,
+html:not(.dark) .language-mermaid .cluster-label span {
+  color: #0f172a !important;
+  fill: #0f172a !important;
+  font-weight: 600 !important;
+  font-family: var(--font-family) !important;
+  font-size: 13.5px !important;
+}
+
+html:not(.dark) .language-mermaid .edgeLabel,
+html:not(.dark) .language-mermaid .edgeLabel p,
+html:not(.dark) .language-mermaid .edgeLabel span {
+  color: #0284c7 !important;
+  fill: #0284c7 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark) .language-mermaid .edgeLabel rect {
+  fill: #f1f5f9 !important;
+  opacity: 0.95 !important;
+  rx: 4px !important;
+  ry: 4px !important;
+}
+
+html:not(.dark) .language-mermaid .flowchart-link,
+html:not(.dark) .language-mermaid .edgePath .path {
+  stroke: #64748b !important;
+  stroke-width: 1.75px !important;
+}
+
+html:not(.dark) .language-mermaid .marker,
+html:not(.dark) .language-mermaid .arrowheadPath {
+  fill: #64748b !important;
+  stroke: #64748b !important;
+}
+
+/* Dark Mode High-Contrast Luminous Mermaid Aesthetics */
+html.dark .language-mermaid .node rect,
+html.dark .language-mermaid .node polygon,
+html.dark .language-mermaid .node circle,
+html.dark .language-mermaid .node ellipse,
+html.dark .language-mermaid .node path {
+  fill: #202127 !important;
+  stroke: #38bdf8 !important;
+  stroke-width: 1.75px !important;
+}
+
+html.dark .language-mermaid .node .label,
+html.dark .language-mermaid .node span,
+html.dark .language-mermaid .node p,
+html.dark .language-mermaid .node text,
+html.dark .language-mermaid .cluster-label text,
+html.dark .language-mermaid .cluster-label span {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+  font-weight: 600 !important;
+  font-family: var(--font-family) !important;
+  font-size: 13.5px !important;
+}
+
+html.dark .language-mermaid .edgeLabel,
+html.dark .language-mermaid .edgeLabel p,
+html.dark .language-mermaid .edgeLabel span {
+  color: #38bdf8 !important;
+  fill: #38bdf8 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+html.dark .language-mermaid .edgeLabel rect {
+  fill: #18181b !important;
+  opacity: 0.95 !important;
+  rx: 4px !important;
+  ry: 4px !important;
+}
+
+html.dark .language-mermaid .flowchart-link,
+html.dark .language-mermaid .edgePath .path {
+  stroke: #94a3b8 !important;
+  stroke-width: 1.75px !important;
+}
+
+html.dark .language-mermaid .marker,
+html.dark .language-mermaid .arrowheadPath {
+  fill: #38bdf8 !important;
+  stroke: #38bdf8 !important;
+}
