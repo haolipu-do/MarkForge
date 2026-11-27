@@ -80,6 +80,8 @@ export const Editor: React.FC<EditorProps> = ({
   const [isReady, setIsReady] = useState(false);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const isInternalChange = useRef(false);
+  const lastEmittedValueRef = useRef<string | null>(null);
+  const lastMountedValueRef = useRef<string>(value || '');
   const currentModeRef = useRef<EditorMode>(editorMode);
   const lastRichModeRef = useRef<'ir' | 'wysiwyg'>(editorMode === 'ir' ? 'ir' : 'wysiwyg');
 
@@ -192,6 +194,26 @@ export const Editor: React.FC<EditorProps> = ({
   useEffect(() => {
     if (!editorRef.current) return;
 
+    const isLargeDoc = (value?.length || 0) > 50000;
+    let inputSyncTimer: ReturnType<typeof setTimeout> | null = null;
+    let statsTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingVal: string | null = null;
+    let scrollThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+    const scrollContainers: HTMLElement[] = [];
+    const scrollCleanups: Array<() => void> = [];
+
+    const flushPendingChange = () => {
+      if (inputSyncTimer) {
+        clearTimeout(inputSyncTimer);
+        inputSyncTimer = null;
+      }
+      if (pendingVal !== null) {
+        const val = pendingVal;
+        pendingVal = null;
+        onChange(val);
+      }
+    };
+
     const initialVditorMode = (editorMode === 'source' || editorMode === 'split') ? 'sv' : editorMode;
     const vditor = new Vditor(editorRef.current, {
       value: value || '',
@@ -263,7 +285,9 @@ export const Editor: React.FC<EditorProps> = ({
         (window as any).__vditor = vditor;
         (window as any).__triggerEditorChange = (val: string) => onChange(val);
         setIsReady(true);
-        analyzeContent(value || '');
+
+        // Defer initial word/outline analysis by 1 frame so massive documents paint immediately
+        requestAnimationFrame(() => analyzeContent(value || ''));
 
         if (editorMode === 'source') {
           vditor.setPreviewMode('editor');
@@ -271,18 +295,29 @@ export const Editor: React.FC<EditorProps> = ({
           vditor.setPreviewMode('both');
         }
 
-        // Restore scroll position
-        const resetEl = editorRef.current?.querySelector('.vditor-reset') as HTMLElement;
-        if (resetEl) {
-          if (initialScrollTop && initialScrollTop > 0) {
-            setTimeout(() => {
-              if (resetEl) resetEl.scrollTop = initialScrollTop;
-            }, 80);
-          }
-          resetEl.addEventListener('scroll', () => {
-            onScrollChange?.(resetEl.scrollTop);
-          }, { passive: true });
+        // Restore scroll position & attach throttled passive scroll listeners to all mode containers
+        const activeReset =
+          Array.from(editorRef.current?.querySelectorAll<HTMLElement>('.vditor-reset') || []).find(
+            el => el.clientHeight > 0
+          ) || (editorRef.current?.querySelector('.vditor-reset') as HTMLElement | null);
+        if (activeReset && initialScrollTop && initialScrollTop > 0) {
+          setTimeout(() => {
+            if (activeReset) activeReset.scrollTop = initialScrollTop;
+          }, 80);
         }
+
+        editorRef.current?.querySelectorAll<HTMLElement>('.vditor-reset, .vditor-sv').forEach((el) => {
+          scrollContainers.push(el);
+          const onElScroll = () => {
+            if (scrollThrottleTimer) return;
+            scrollThrottleTimer = setTimeout(() => {
+              scrollThrottleTimer = null;
+              onScrollChange?.(el.scrollTop);
+            }, 150);
+          };
+          el.addEventListener('scroll', onElScroll, { passive: true });
+          scrollCleanups.push(() => el.removeEventListener('scroll', onElScroll));
+        });
 
         // Enhance tooltips on all toolbar buttons (use aria-label only to prevent ugly browser tooltip)
         const buttons = editorRef.current?.querySelectorAll<HTMLButtonElement>('.vditor-toolbar__item button');
@@ -297,15 +332,39 @@ export const Editor: React.FC<EditorProps> = ({
       },
       input: (val: string) => {
         isInternalChange.current = true;
-        onChange(val);
-        analyzeContent(val);
-        setTimeout(() => {
-          isInternalChange.current = false;
-        }, 50);
+        pendingVal = val;
+
+        // Debounce full-app state & stats updates to keep typing smooth on 300k+ char files
+        const changeDelay = val.length > 50000 || isLargeDoc ? 240 : 120;
+        const statsDelay = val.length > 50000 || isLargeDoc ? 450 : 200;
+
+        if (inputSyncTimer) clearTimeout(inputSyncTimer);
+        inputSyncTimer = setTimeout(() => {
+          inputSyncTimer = null;
+          if (pendingVal !== null) {
+            const latest = pendingVal;
+            pendingVal = null;
+            lastEmittedValueRef.current = latest;
+            onChange(latest);
+          }
+          setTimeout(() => {
+            isInternalChange.current = false;
+          }, 60);
+        }, changeDelay);
+
+        if (statsTimer) clearTimeout(statsTimer);
+        statsTimer = setTimeout(() => {
+          statsTimer = null;
+          analyzeContent(val);
+        }, statsDelay);
       },
     });
 
     return () => {
+      flushPendingChange();
+      if (statsTimer) clearTimeout(statsTimer);
+      if (scrollThrottleTimer) clearTimeout(scrollThrottleTimer);
+      scrollCleanups.forEach(fn => fn());
       try {
         vditor.destroy();
       } catch (err) {
@@ -314,14 +373,17 @@ export const Editor: React.FC<EditorProps> = ({
     };
   }, []);
 
-  // Update value when active document changes externally
+  // Update value when active document changes externally (skip redundant 700ms+ getValue on mount)
   useEffect(() => {
-    if (isReady && vditorInstance.current && !isInternalChange.current) {
-      const currentVal = vditorInstance.current.getValue();
-      if (currentVal !== value) {
-        vditorInstance.current.setValue(value || '');
-        analyzeContent(value || '');
-      }
+    if (!isReady || !vditorInstance.current || isInternalChange.current) return;
+    if (lastEmittedValueRef.current === value || lastMountedValueRef.current === value) {
+      lastMountedValueRef.current = '';
+      return;
+    }
+    const currentVal = vditorInstance.current.getValue();
+    if (currentVal !== value) {
+      vditorInstance.current.setValue(value || '');
+      requestAnimationFrame(() => analyzeContent(value || ''));
     }
   }, [value, isReady]);
 
@@ -489,9 +551,9 @@ export const Editor: React.FC<EditorProps> = ({
         blocks,
       };
 
-      // Dynamically track table context and update table button label/state
+      // Dynamically track table context (only update React state when entering/updating/leaving a table)
       const ctx = getTableContext(vditorInstance.current, range);
-      setTableContext(ctx);
+      setTableContext(prev => (!prev.inTable && !ctx.inTable ? prev : ctx));
 
       const tableBtn = editorContainer.querySelector('.vditor-toolbar button[data-type="table"]') as HTMLButtonElement;
       if (tableBtn) {
@@ -505,7 +567,16 @@ export const Editor: React.FC<EditorProps> = ({
       }
     };
 
-    document.addEventListener('selectionchange', updateSavedSelection);
+    let selRafId: number | null = null;
+    const scheduleSelectionUpdate = () => {
+      if (selRafId !== null) return;
+      selRafId = requestAnimationFrame(() => {
+        selRafId = null;
+        updateSavedSelection();
+      });
+    };
+
+    document.addEventListener('selectionchange', scheduleSelectionUpdate);
 
     // Prevent blur on mousedown so focus and selection inside code-block-info are preserved
     const handleMouseDownCapture = (e: MouseEvent) => {
@@ -1147,7 +1218,11 @@ export const Editor: React.FC<EditorProps> = ({
       });
     };
 
-    const handleScroll = () => {
+    const handleScroll = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('.context-menu-popover, .context-menu-submenu')) {
+        return;
+      }
       setContextMenu(null);
       setHoverLinkTooltip(null);
     };
@@ -1191,21 +1266,25 @@ export const Editor: React.FC<EditorProps> = ({
       }
     };
 
-    // Hover tooltip for links to show Ctrl+Click guidance
+    // Hover tooltip for links to show Ctrl+Click guidance (deduplicated by target element)
+    let lastHoverTarget: HTMLElement | null = null;
     const handleMouseMove = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
+      const target = e.target as HTMLElement | null;
+      if (target === lastHoverTarget) return;
+      lastHoverTarget = target;
+
       if (!target || !editorContainer.contains(target)) {
-        setHoverLinkTooltip(prev => prev ? null : prev);
+        setHoverLinkTooltip(prev => (prev ? null : prev));
         return;
       }
       if (target.closest('.vditor-toolbar') || target.closest('.vditor-panel') || target.closest('.vditor-hint')) {
-        setHoverLinkTooltip(prev => prev ? null : prev);
+        setHoverLinkTooltip(prev => (prev ? null : prev));
         return;
       }
 
       const linkInfo = extractLinkInfo(target);
       if (linkInfo && linkInfo.href) {
-        const linkNode = target.closest('a, [data-type="a"]') as HTMLElement || target;
+        const linkNode = (target.closest('a, [data-type="a"]') as HTMLElement) || target;
         const rect = linkNode.getBoundingClientRect();
         const tooltipX = Math.max(10, Math.min(window.innerWidth - 320, rect.left));
         const tooltipY = rect.bottom + 6;
@@ -1216,14 +1295,15 @@ export const Editor: React.FC<EditorProps> = ({
           y: tooltipY,
           href: linkInfo.href,
           text: linkInfo.text || linkInfo.href,
-          isInternal: linkInfo.isInternal
+          isInternal: linkInfo.isInternal,
         });
       } else {
-        setHoverLinkTooltip(prev => prev ? null : prev);
+        setHoverLinkTooltip(prev => (prev ? null : prev));
       }
     };
 
     const handleMouseLeave = () => {
+      lastHoverTarget = null;
       setHoverLinkTooltip(null);
     };
 
@@ -1241,6 +1321,7 @@ export const Editor: React.FC<EditorProps> = ({
     window.addEventListener('click', handleOutsideClick, false);
 
     return () => {
+      if (selRafId !== null) cancelAnimationFrame(selRafId);
       observer?.disconnect();
       window.removeEventListener('markforge-set-editor-mode', handleSetEditorModeEvent);
       window.removeEventListener('contextmenu', handleContextMenu);
@@ -1248,7 +1329,7 @@ export const Editor: React.FC<EditorProps> = ({
       window.removeEventListener('markforge-table-action', handleCustomTableAction);
       window.removeEventListener('markforge-heading-action', handleCustomHeadingAction);
       window.removeEventListener('markforge-format-action', handleCustomFormatAction);
-      document.removeEventListener('selectionchange', updateSavedSelection);
+      document.removeEventListener('selectionchange', scheduleSelectionUpdate);
       editorContainer.removeEventListener('focusin', handleFocusOrInput, true);
       editorContainer.removeEventListener('input', handleFocusOrInput, true);
       editorContainer.removeEventListener('click', handleEditorLinkClick, true);

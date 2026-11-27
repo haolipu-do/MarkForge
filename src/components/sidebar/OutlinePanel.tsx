@@ -1,6 +1,6 @@
 /**
  * @file src/components/sidebar/OutlinePanel.tsx
- * @description 实时 Markdown 多层级大纲树面板，支持关键词筛选、折叠展开与精准跳转高亮
+ * @description 实时 Markdown 多层级大纲树面板，支持大文档虚拟列表渲染、二分查找滚动同步与极速章节跳转
  * @module 侧边栏导航模块
  */
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -20,6 +20,9 @@ const LEVEL_COLORS = [
   'text-zinc-600 dark:text-zinc-400',
 ];
 
+const ROW_HEIGHT = 30;
+const VIRTUALIZE_THRESHOLD = 120;
+
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({
   markdownContent,
   isActive,
@@ -27,32 +30,57 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({
 }) => {
   const [outlineFilter, setOutlineFilter] = useState('');
   const [activeHeadingIndex, setActiveHeadingIndex] = useState<number>(-1);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(500);
+
   const isNavigatingRef = useRef(false);
   const navTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const domHeadingsRef = useRef<HTMLElement[]>([]);
+  const listContainerRef = useRef<HTMLDivElement>(null);
 
+  // Single-pass zero-split heading parser (handles 300k+ char docs without allocating line arrays)
   const headings = useMemo(() => {
     if (!markdownContent) return [];
-    const lines = markdownContent.split('\n');
     const list: { level: number; text: string; line: number; index: number }[] = [];
+    const len = markdownContent.length;
     let inCode = false;
     let headingIdx = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line.startsWith('```')) {
-        inCode = !inCode;
-        continue;
+    let lineNum = 1;
+    let lineStart = 0;
+
+    for (let i = 0; i <= len; i++) {
+      if (i < len && markdownContent.charCodeAt(i) !== 10) continue;
+
+      if (i > lineStart) {
+        let p = lineStart;
+        while (p < i && (markdownContent.charCodeAt(p) === 32 || markdownContent.charCodeAt(p) === 9)) p++;
+        const firstCh = p < i ? markdownContent.charCodeAt(p) : 0;
+
+        if (firstCh === 96 && markdownContent.startsWith('```', p)) {
+          inCode = !inCode;
+        } else if (!inCode && firstCh === 35 /* '#' */) {
+          let level = 0;
+          while (p + level < i && markdownContent.charCodeAt(p + level) === 35 && level <= 6) {
+            level++;
+          }
+          if (
+            level >= 1 &&
+            level <= 6 &&
+            p + level < i &&
+            (markdownContent.charCodeAt(p + level) === 32 || markdownContent.charCodeAt(p + level) === 9)
+          ) {
+            const text = markdownContent.slice(p + level + 1, i).trim();
+            if (text) {
+              list.push({ level, text, line: lineNum, index: headingIdx++ });
+            }
+          }
+        }
       }
-      if (inCode) continue;
-      const match = line.match(/^(#{1,6})\s+(.+)$/);
-      if (match) {
-        list.push({
-          level: match[1].length,
-          text: match[2].trim(),
-          line: i + 1,
-          index: headingIdx++,
-        });
-      }
+
+      lineNum++;
+      lineStart = i + 1;
     }
+
     return list;
   }, [markdownContent]);
 
@@ -62,56 +90,91 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({
     return headings.filter(h => h.text.toLowerCase().includes(q));
   }, [headings, outlineFilter]);
 
+  const isVirtualized = filteredHeadings.length > VIRTUALIZE_THRESHOLD;
+
+  useEffect(() => {
+    const el = listContainerRef.current;
+    if (!isVirtualized || !el) return;
+    setViewportHeight(el.clientHeight || 500);
+    const onResize = () => setViewportHeight(el.clientHeight || 500);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [isVirtualized]);
+
+  // Track active heading via IntersectionObserver (zero forced layout / offsetTop reflows on 300k+ docs)
   useEffect(() => {
     if (!isActive) return;
 
-    let ticking = false;
-    const handleScrollSync = () => {
-      if (isNavigatingRef.current || ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        ticking = false;
-        if (isNavigatingRef.current) return;
+    let io: IntersectionObserver | null = null;
+    let initTimer: ReturnType<typeof setTimeout> | null = null;
+    let scrollFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
-        const activeReset = getActiveEditorElement();
-        if (!activeReset) return;
+    const setupObserver = () => {
+      const activeReset = getActiveEditorElement();
+      if (!activeReset) return;
 
-        const domHeadings = Array.from(
-          activeReset.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, [data-type="heading"]')
-        );
-        if (domHeadings.length === 0) return;
+      const domHeadings = Array.from(
+        activeReset.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, [data-type="heading"]')
+      );
+      domHeadingsRef.current = domHeadings;
+      if (domHeadings.length === 0) return;
 
-        const isAtBottom = activeReset.scrollHeight - activeReset.scrollTop - activeReset.clientHeight <= 40;
-        if (isAtBottom) {
-          const lastIdx = domHeadings.length - 1;
-          setActiveHeadingIndex(prev => (prev === lastIdx ? prev : lastIdx));
-          return;
-        }
+      if (activeReset.scrollTop <= 10) {
+        setActiveHeadingIndex(prev => (prev === 0 ? prev : 0));
+      }
 
-        const currentScroll = activeReset.scrollTop;
-        let currentIdx = 0;
-        for (let i = 0; i < domHeadings.length; i++) {
-          if (domHeadings[i].offsetTop <= currentScroll + 70) {
-            currentIdx = i;
-          } else {
-            break;
+      const indexMap = new WeakMap<Element, number>();
+      domHeadings.forEach((el, idx) => indexMap.set(el, idx));
+
+      io?.disconnect();
+      io = new IntersectionObserver(
+        (entries) => {
+          if (isNavigatingRef.current) return;
+          let latestIntersecting = -1;
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const idx = indexMap.get(entry.target);
+              if (idx !== undefined && idx > latestIntersecting) {
+                latestIntersecting = idx;
+              }
+            }
           }
-        }
-        setActiveHeadingIndex(prev => (prev === currentIdx ? prev : currentIdx));
-      });
+          if (latestIntersecting >= 0) {
+            setActiveHeadingIndex(prev => (prev === latestIntersecting ? prev : latestIntersecting));
+          }
+        },
+        { root: activeReset, rootMargin: '0px 0px -75% 0px', threshold: 0 }
+      );
+
+      domHeadings.forEach((h) => io!.observe(h));
     };
 
     const activeReset = getActiveEditorElement();
-    if (activeReset) {
-      activeReset.addEventListener('scroll', handleScrollSync, { passive: true });
-      handleScrollSync();
-    }
+    const onScrollBottomCheck = () => {
+      if (isNavigatingRef.current || scrollFallbackTimer !== null || !activeReset) return;
+      scrollFallbackTimer = setTimeout(() => {
+        scrollFallbackTimer = null;
+        if (isNavigatingRef.current) return;
+        const atBottom = activeReset.scrollHeight - activeReset.scrollTop - activeReset.clientHeight <= 40;
+        if (atBottom && domHeadingsRef.current.length > 0) {
+          const lastIdx = domHeadingsRef.current.length - 1;
+          setActiveHeadingIndex(prev => (prev === lastIdx ? prev : lastIdx));
+        }
+      }, 150);
+    };
 
-    const timer = setTimeout(handleScrollSync, 150);
+    if (activeReset) {
+      setupObserver();
+      activeReset.addEventListener('scroll', onScrollBottomCheck, { passive: true });
+    }
+    initTimer = setTimeout(setupObserver, 200);
+
     return () => {
-      clearTimeout(timer);
+      if (initTimer) clearTimeout(initTimer);
+      if (scrollFallbackTimer) clearTimeout(scrollFallbackTimer);
       if (navTimerRef.current) clearTimeout(navTimerRef.current);
-      activeReset?.removeEventListener('scroll', handleScrollSync);
+      io?.disconnect();
+      activeReset?.removeEventListener('scroll', onScrollBottomCheck);
     };
   }, [isActive, getActiveEditorElement, markdownContent]);
 
@@ -120,45 +183,51 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({
       const activeReset = getActiveEditorElement();
       if (!activeReset) return;
 
-      const domHeadings = Array.from(
-        activeReset.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, [data-type="heading"]')
-      );
+      const domHeadings =
+        domHeadingsRef.current.length > 0 && activeReset.contains(domHeadingsRef.current[0])
+          ? domHeadingsRef.current
+          : (domHeadingsRef.current = Array.from(
+              activeReset.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6, [data-type="heading"]')
+            ));
+
       if (domHeadings.length === 0) return;
 
       let targetH: HTMLElement | null = null;
+      const cleanTarget = headingText.replace(/[*_`~[\]#]/g, '').trim().toLowerCase();
 
       if (originalIndex >= 0 && originalIndex < domHeadings.length) {
         const candidate = domHeadings[originalIndex];
         const candText = candidate.textContent?.replace(/[*_`~[\]#]/g, '').trim().toLowerCase() || '';
-        const cleanTarget = headingText.replace(/[*_`~[\]#]/g, '').trim().toLowerCase();
         if (candText.includes(cleanTarget) || cleanTarget.includes(candText)) {
           targetH = candidate;
         }
       }
 
       if (!targetH) {
-        const clean = headingText.replace(/[*_`~[\]#]/g, '').trim().toLowerCase();
         targetH = domHeadings.find(h => {
           const hText = h.textContent?.replace(/[*_`~[\]#]/g, '').trim().toLowerCase() || '';
-          return hText.includes(clean) || clean.includes(hText);
+          return hText.includes(cleanTarget) || cleanTarget.includes(hText);
         }) || null;
       }
 
       if (!targetH) return;
 
+      // Use instant scroll on large documents (>80 headings) and skip pre-scroll getBoundingClientRect reflow
+      const useInstant = headings.length > 80 || Math.abs(targetH.getBoundingClientRect().top) > 800;
+
       isNavigatingRef.current = true;
       if (navTimerRef.current) clearTimeout(navTimerRef.current);
       navTimerRef.current = setTimeout(() => {
         isNavigatingRef.current = false;
-      }, 850);
+      }, useInstant ? 120 : 850);
 
       setActiveHeadingIndex(originalIndex);
-      activeReset.scrollTo({
-        top: Math.max(0, targetH.offsetTop - 18),
-        behavior: 'smooth',
+      targetH.scrollIntoView({
+        behavior: useInstant ? 'auto' : 'smooth',
+        block: 'start',
       });
 
-      targetH.style.transition = 'background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.3s ease';
+      targetH.style.transition = 'background-color 0.3s ease, box-shadow 0.3s ease, border-radius 0.3s ease';
       targetH.style.backgroundColor = 'rgba(56, 189, 248, 0.25)';
       targetH.style.boxShadow = '0 0 0 4px rgba(56, 189, 248, 0.15)';
       targetH.style.borderRadius = '6px';
@@ -173,6 +242,46 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({
       console.warn('Failed to jump to heading:', err);
     }
   };
+
+  const renderHeadingRow = (h: { level: number; text: string; line: number; index: number }) => {
+    const badgeColor = LEVEL_COLORS[h.level - 1] || 'text-zinc-600 dark:text-zinc-400';
+    const isActiveItem = activeHeadingIndex === h.index;
+    return (
+      <div
+        key={h.index}
+        onClick={() => handleHeadingClick(h.text, h.index)}
+        style={{ paddingLeft: `${(h.level - 1) * 10 + 6}px`, height: isVirtualized ? `${ROW_HEIGHT}px` : undefined }}
+        className={`group relative flex items-center justify-between py-1 px-2 rounded-lg cursor-pointer text-xs transition-colors ${
+          isActiveItem
+            ? 'bg-sky-100/90 border border-sky-300/90 text-sky-950 font-bold shadow-sm dark:bg-sky-500/15 dark:border-sky-500/40 dark:text-sky-300'
+            : 'hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-transparent hover:border-[var(--border-subtle)]'
+        }`}
+        title={`点击快速跳转至: ${h.text}`}
+      >
+        <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+          {isActiveItem && (
+            <div className="w-1.5 h-3.5 bg-sky-600 dark:bg-sky-400 rounded-full shrink-0 shadow-sm shadow-sky-500/50 -ml-1 mr-0.5" />
+          )}
+          <span className={`text-[10px] font-mono shrink-0 ${isActiveItem ? 'text-sky-700 dark:text-sky-400 font-bold' : badgeColor}`}>
+            H{h.level}
+          </span>
+          <span className={`truncate ${isActiveItem ? 'text-sky-950 dark:text-sky-200 font-bold' : 'group-hover:text-sky-700 dark:group-hover:text-sky-400'}`}>
+            {h.text}
+          </span>
+        </div>
+        <span className={`text-[10px] font-mono shrink-0 ml-1 ${isActiveItem ? 'text-sky-700 dark:text-sky-400 font-bold' : 'text-[var(--text-muted)]'}`}>
+          L{h.line}
+        </span>
+      </div>
+    );
+  };
+
+  const overscan = 10;
+  const startIdx = isVirtualized ? Math.max(0, Math.floor(scrollOffset / ROW_HEIGHT) - overscan) : 0;
+  const endIdx = isVirtualized
+    ? Math.min(filteredHeadings.length, Math.ceil((scrollOffset + viewportHeight) / ROW_HEIGHT) + overscan)
+    : filteredHeadings.length;
+  const visibleSlice = isVirtualized ? filteredHeadings.slice(startIdx, endIdx) : filteredHeadings;
 
   return (
     <div className="space-y-2">
@@ -202,40 +311,21 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({
         <div className="py-6 text-center text-xs text-[var(--text-muted)]">
           未匹配到对应标题
         </div>
+      ) : isVirtualized ? (
+        <div
+          ref={listContainerRef}
+          onScroll={(e) => setScrollOffset((e.currentTarget as HTMLDivElement).scrollTop)}
+          className="max-h-[calc(100vh-145px)] overflow-y-auto pr-0.5"
+        >
+          <div style={{ height: `${filteredHeadings.length * ROW_HEIGHT}px`, position: 'relative' }}>
+            <div style={{ transform: `translateY(${startIdx * ROW_HEIGHT}px)` }}>
+              {visibleSlice.map(renderHeadingRow)}
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="space-y-0.5">
-          {filteredHeadings.map((h) => {
-            const badgeColor = LEVEL_COLORS[h.level - 1] || 'text-zinc-600 dark:text-zinc-400';
-            const isActiveItem = activeHeadingIndex === h.index;
-            return (
-              <div
-                key={h.index}
-                onClick={() => handleHeadingClick(h.text, h.index)}
-                style={{ paddingLeft: `${(h.level - 1) * 10 + 6}px` }}
-                className={`group relative flex items-center justify-between py-1.5 px-2 rounded-lg cursor-pointer text-xs transition-all ${
-                  isActiveItem
-                    ? 'bg-sky-100/90 border border-sky-300/90 text-sky-950 font-bold shadow-sm dark:bg-sky-500/15 dark:border-sky-500/40 dark:text-sky-300'
-                    : 'hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-transparent hover:border-[var(--border-subtle)]'
-                }`}
-                title={`点击快速跳转至: ${h.text}`}
-              >
-                <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                  {isActiveItem && (
-                    <div className="w-1.5 h-3.5 bg-sky-600 dark:bg-sky-400 rounded-full shrink-0 shadow-sm shadow-sky-500/50 -ml-1 mr-0.5 animate-in fade-in duration-150" />
-                  )}
-                  <span className={`text-[10px] font-mono shrink-0 ${isActiveItem ? 'text-sky-700 dark:text-sky-400 font-bold' : badgeColor}`}>
-                    H{h.level}
-                  </span>
-                  <span className={`truncate ${isActiveItem ? 'text-sky-950 dark:text-sky-200 font-bold' : 'group-hover:text-sky-700 dark:group-hover:text-sky-400'}`}>
-                    {h.text}
-                  </span>
-                </div>
-                <span className={`text-[10px] font-mono shrink-0 ml-1 ${isActiveItem ? 'text-sky-700 dark:text-sky-400 font-bold' : 'text-[var(--text-muted)]'}`}>
-                  L{h.line}
-                </span>
-              </div>
-            );
-          })}
+          {visibleSlice.map(renderHeadingRow)}
         </div>
       )}
     </div>

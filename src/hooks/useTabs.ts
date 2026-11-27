@@ -26,21 +26,24 @@ export function useTabs({ onRefreshFolder }: UseTabsOptions = {}) {
   ]);
   const [activeTabId, setActiveTabId] = useState<string>('tab-welcome');
   const [pendingClose, setPendingClose] = useState<{ type: 'tab' | 'app'; tabId: string } | null>(null);
+  const scrollPositionsRef = useRef<Record<string, number>>({});
 
   const onRefreshFolderRef = useRef(onRefreshFolder);
   onRefreshFolderRef.current = onRefreshFolder;
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   const pendingTab = pendingClose ? tabs.find(t => t.id === pendingClose.tabId) : null;
+  const activeTabScrollTop = scrollPositionsRef.current[activeTabId] || 0;
 
   // Auto-save debounce for opened local files
   useEffect(() => {
     if (!activeTab || !activeTab.path || !activeTab.isDirty) return;
     const timer = setTimeout(async () => {
       try {
-        await window.electronAPI?.writeFile(activeTab.path!, activeTab.content);
+        const latestContent = (window as any).__vditor?.getValue?.() ?? activeTab.content;
+        await window.electronAPI?.writeFile(activeTab.path!, latestContent);
         setTabs(prev =>
-          prev.map(t => (t.id === activeTab.id ? { ...t, isDirty: false } : t))
+          prev.map(t => (t.id === activeTab.id ? { ...t, content: latestContent, isDirty: false } : t))
         );
       } catch (err) {
         console.error('Auto save failed:', err);
@@ -50,10 +53,9 @@ export function useTabs({ onRefreshFolder }: UseTabsOptions = {}) {
     return () => clearTimeout(timer);
   }, [activeTab?.content, activeTab?.isDirty, activeTab?.path]);
 
+  // Store per-tab scroll position in a ref to avoid triggering full React tree re-renders on scroll
   const handleScrollChange = useCallback((scrollTop: number) => {
-    setTabs(prev =>
-      prev.map(t => (t.id === activeTabId ? { ...t, scrollTop } : t))
-    );
+    scrollPositionsRef.current[activeTabId] = scrollTop;
   }, [activeTabId]);
 
   const handleContentChange = useCallback((newContent: string) => {
@@ -142,12 +144,13 @@ export function useTabs({ onRefreshFolder }: UseTabsOptions = {}) {
 
   const handleSaveFileAs = useCallback(async () => {
     if (!activeTab) return;
-    const res = await window.electronAPI?.saveFileAs(activeTab.name, activeTab.content);
+    const latestContent = (window as any).__vditor?.getValue?.() ?? activeTab.content;
+    const res = await window.electronAPI?.saveFileAs(activeTab.name, latestContent);
     if (res) {
       setTabs(prev =>
         prev.map(t =>
           t.id === activeTab.id
-            ? { ...t, path: res.path, name: res.name, isDirty: false }
+            ? { ...t, path: res.path, name: res.name, content: latestContent, isDirty: false }
             : t
         )
       );
@@ -157,11 +160,12 @@ export function useTabs({ onRefreshFolder }: UseTabsOptions = {}) {
 
   const handleSaveFile = useCallback(async () => {
     if (!activeTab) return;
+    const latestContent = (window as any).__vditor?.getValue?.() ?? activeTab.content;
 
     if (activeTab.path) {
-      await window.electronAPI?.writeFile(activeTab.path, activeTab.content);
+      await window.electronAPI?.writeFile(activeTab.path, latestContent);
       setTabs(prev =>
-        prev.map(t => (t.id === activeTab.id ? { ...t, isDirty: false } : t))
+        prev.map(t => (t.id === activeTab.id ? { ...t, content: latestContent, isDirty: false } : t))
       );
     } else {
       await handleSaveFileAs();
@@ -317,6 +321,7 @@ export function useTabs({ onRefreshFolder }: UseTabsOptions = {}) {
     setTabs,
     activeTabId,
     activeTab,
+    activeTabScrollTop,
     pendingClose,
     pendingTab,
     handleScrollChange,

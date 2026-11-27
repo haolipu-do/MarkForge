@@ -1,6 +1,6 @@
 /**
  * @file src/components/sidebar/SearchPanel.tsx
- * @description 侧边栏全文检索面板，支持实时关键词匹配片段高亮与点击跳转正文对应行
+ * @description 侧边栏全文检索面板，支持大文档流式行扫描、输入防抖、结果上限保护与极速定位跳转
  * @module 侧边栏导航模块
  */
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -12,6 +12,8 @@ interface SearchPanelProps {
   getActiveEditorElement: () => HTMLElement | null;
 }
 
+const MAX_RESULTS = 300;
+
 export const SearchPanel: React.FC<SearchPanelProps> = ({
   markdownContent,
   isActive,
@@ -19,6 +21,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   getActiveEditorElement,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -30,17 +33,48 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     }
   }, [isActive, focusTrigger]);
 
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const lines = markdownContent.split('\n');
-    const matches: { line: number; text: string }[] = [];
-    lines.forEach((line, idx) => {
-      if (line.toLowerCase().includes(searchQuery.toLowerCase())) {
-        matches.push({ line: idx + 1, text: line.trim() });
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 120);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Zero-split single-pass scan capped at MAX_RESULTS so massive docs never crash React DOM
+  const { matches, truncated } = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    if (!q || !markdownContent) return { matches: [], truncated: false };
+
+    const results: { line: number; text: string }[] = [];
+    const lowerDoc = markdownContent.toLowerCase();
+    let idx = 0;
+    let lineNum = 1;
+    let lastPos = 0;
+    let hasMore = false;
+
+    while ((idx = lowerDoc.indexOf(q, idx)) !== -1) {
+      for (let k = lastPos; k < idx; k++) {
+        if (markdownContent.charCodeAt(k) === 10) lineNum++;
       }
-    });
-    return matches;
-  }, [searchQuery, markdownContent]);
+      lastPos = idx;
+
+      const prevNewline = markdownContent.lastIndexOf('\n', idx);
+      const lineStart = prevNewline === -1 ? 0 : prevNewline + 1;
+      const nextNewline = markdownContent.indexOf('\n', idx);
+      const lineEnd = nextNewline === -1 ? markdownContent.length : nextNewline;
+
+      results.push({
+        line: lineNum,
+        text: markdownContent.slice(lineStart, Math.min(lineEnd, lineStart + 160)).trim(),
+      });
+
+      if (results.length >= MAX_RESULTS) {
+        hasMore = lowerDoc.indexOf(q, lineEnd + 1) !== -1;
+        break;
+      }
+      idx = lineEnd + 1;
+    }
+
+    return { matches: results, truncated: hasMore };
+  }, [debouncedQuery, markdownContent]);
 
   const handleJumpToMatch = (text: string) => {
     try {
@@ -53,7 +87,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         if (walker.currentNode.textContent?.toLowerCase().includes(clean)) {
           const parent = walker.currentNode.parentElement;
           if (parent) {
-            editorEl.scrollTo({ top: Math.max(0, parent.offsetTop - 30), behavior: 'smooth' });
+            const isFar = Math.abs(parent.getBoundingClientRect().top) > 1800;
+            parent.scrollIntoView({ behavior: isFar ? 'auto' : 'smooth', block: 'center' });
             parent.style.transition = 'background-color 0.3s ease, border-radius 0.3s ease';
             parent.style.backgroundColor = 'rgba(56, 189, 248, 0.25)';
             parent.style.borderRadius = '4px';
@@ -80,14 +115,14 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         />
       </div>
 
-      {searchQuery && (
+      {debouncedQuery.trim() && (
         <div className="space-y-1">
           <div className="text-[11px] text-[var(--text-muted)] px-1">
-            共找到 {searchResults.length} 条匹配
+            {truncated ? `已展示前 ${MAX_RESULTS} 条匹配（请补充更精确关键词）` : `共找到 ${matches.length} 条匹配`}
           </div>
-          {searchResults.map((res, i) => (
+          {matches.map((res, i) => (
             <div
-              key={i}
+              key={`${res.line}-${i}`}
               onClick={() => handleJumpToMatch(res.text)}
               className="p-1.5 rounded hover:bg-[var(--bg-hover)] text-xs cursor-pointer border border-transparent hover:border-[var(--border-subtle)] flex items-center justify-between"
               title="点击定位到该处内容"

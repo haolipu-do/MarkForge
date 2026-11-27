@@ -62,6 +62,7 @@ export const App: React.FC = () => {
     setTabs,
     activeTabId,
     activeTab,
+    activeTabScrollTop,
     pendingClose,
     pendingTab,
     handleScrollChange,
@@ -285,7 +286,7 @@ export const App: React.FC = () => {
               value={activeTab?.content || ''}
               onChange={handleContentChange}
               theme={theme}
-              initialScrollTop={activeTab?.scrollTop || 0}
+              initialScrollTop={activeTabScrollTop}
               onScrollChange={handleScrollChange}
               onStatsChange={setStats}
               onHeadingsChange={setHeadings}

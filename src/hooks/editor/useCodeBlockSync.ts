@@ -1,6 +1,6 @@
 /**
  * @file src/hooks/editor/useCodeBlockSync.ts
- * @description 在 IR 与 WYSIWYG 模式下实时同步代码块的 highlight.js 语法着色、行号与横向滚动位置
+ * @description 在 IR 与 WYSIWYG 模式下使用可视区懒渲染与局部脏块同步机制实时着色代码块与行号
  * @module 编辑器核心 Hook
  */
 import { useEffect, RefObject } from 'react';
@@ -10,10 +10,19 @@ const SPECIAL_CODE_LANGS = new Set([
   'graphviz', 'wavedrom', 'smiles', 'markmap', 'abc', 'math',
 ]);
 
+function fastHash(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 /**
- * Synchronizes real-time highlight.js syntax highlighting, line numbers,
- * and horizontal scroll between Vditor's editable code block and preview overlay
- * across both IR and WYSIWYG modes.
+ * Lazily synchronizes highlight.js syntax highlighting, line numbers, and horizontal scroll
+ * only for visible/nearby code blocks (`IntersectionObserver`) and mutated dirty blocks,
+ * preventing main-thread freezes on huge multi-hundred-kilobyte documents.
  */
 export function useCodeBlockSync(
   editorRef: RefObject<HTMLDivElement>,
@@ -25,6 +34,10 @@ export function useCodeBlockSync(
     if (!isReady || !container) return;
 
     let isSyncing = false;
+    const syncedSignatures = new WeakMap<HTMLElement, string>();
+    const observedBlocks = new WeakSet<HTMLElement>();
+    const dirtyBlocks = new Set<HTMLElement>();
+    let rafId: number | null = null;
 
     const getCodeBlockLanguage = (blockEl: HTMLElement): string => {
       const infoEl = blockEl.querySelector('[data-type="code-block-info"]');
@@ -40,8 +53,8 @@ export function useCodeBlockSync(
       return '';
     };
 
-    const syncSingleCodeBlock = (blockEl: HTMLElement) => {
-      if (isSyncing) return;
+    const syncSingleCodeBlock = (blockEl: HTMLElement, force = false) => {
+      if (isSyncing || !blockEl.isConnected) return;
       isSyncing = true;
       try {
         const isWysiwyg = blockEl.classList.contains('vditor-wysiwyg__block');
@@ -85,6 +98,11 @@ export function useCodeBlockSync(
         }
 
         const hljs = (window as any).hljs;
+        const sig = `${theme}:${lang}:${rawText.length}:${fastHash(rawText)}:${Boolean(hljs)}`;
+        if (!force && syncedSignatures.get(blockEl) === sig && previewCode.childElementCount > 0) {
+          return;
+        }
+
         if (hljs) {
           const validLang = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
           const highlighted = hljs.highlight(rawText, { language: validLang, ignoreIllegals: true }).value;
@@ -96,6 +114,7 @@ export function useCodeBlockSync(
           const rowsHtml = `<span class="vditor-linenumber__rows">${'<span></span>'.repeat(lineCount)}</span>`;
           previewCode.className = `language-${lang || 'plaintext'} hljs vditor-linenumber`;
           previewCode.innerHTML = highlighted + rowsHtml;
+          syncedSignatures.set(blockEl, sig);
         }
         previewCode.scrollLeft = editCode.scrollLeft;
       } finally {
@@ -103,14 +122,49 @@ export function useCodeBlockSync(
       }
     };
 
-    const syncAllCodeBlocks = () => {
-      container.querySelectorAll<HTMLElement>('[data-type="code-block"]').forEach(syncSingleCodeBlock);
+    // Lazily highlight code blocks only when near or inside the viewport
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            syncSingleCodeBlock(entry.target as HTMLElement);
+          }
+        }
+      },
+      { rootMargin: '800px 0px' }
+    );
+
+    const registerCodeBlocks = (root: ParentNode) => {
+      root.querySelectorAll<HTMLElement>('[data-type="code-block"]').forEach((blockEl) => {
+        if (!observedBlocks.has(blockEl)) {
+          observedBlocks.add(blockEl);
+          intersectionObserver.observe(blockEl);
+        }
+      });
+    };
+
+    const flushDirtyBlocks = () => {
+      rafId = null;
+      dirtyBlocks.forEach((blockEl) => syncSingleCodeBlock(blockEl));
+      dirtyBlocks.clear();
+    };
+
+    const queueDirtyBlock = (blockEl: HTMLElement | null) => {
+      if (!blockEl) return;
+      if (!observedBlocks.has(blockEl)) {
+        observedBlocks.add(blockEl);
+        intersectionObserver.observe(blockEl);
+      }
+      dirtyBlocks.add(blockEl);
+      if (rafId === null) {
+        rafId = requestAnimationFrame(flushDirtyBlocks);
+      }
     };
 
     const handleCodeEvent = (e: Event) => {
       const target = e.target as HTMLElement | null;
       const blockEl = target?.closest?.('[data-type="code-block"]') as HTMLElement | null;
-      if (blockEl) syncSingleCodeBlock(blockEl);
+      if (blockEl) syncSingleCodeBlock(blockEl, true);
     };
 
     const handleCodeScroll = (e: Event) => {
@@ -131,36 +185,46 @@ export function useCodeBlockSync(
     events.forEach(ev => container.addEventListener(ev, handleCodeEvent, true));
     container.addEventListener('scroll', handleCodeScroll, true);
 
-    let rafId: number | null = null;
-    const scheduleSync = () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        syncAllCodeBlocks();
-      });
-    };
-
     const observer = new MutationObserver((mutations) => {
       if (isSyncing) return;
-      const touched = mutations.some(m => {
-        const node = m.target as HTMLElement;
-        return !node?.closest?.('.vditor-ir__preview, .vditor-wysiwyg__preview');
-      });
-      if (touched) scheduleSync();
+      for (const m of mutations) {
+        const node = m.target as HTMLElement | null;
+        if (!node || node?.closest?.('.vditor-ir__preview, .vditor-wysiwyg__preview')) continue;
+        const blockEl = node?.closest?.('[data-type="code-block"]') as HTMLElement | null;
+        if (blockEl) {
+          queueDirtyBlock(blockEl);
+        } else if (m.addedNodes.length > 0) {
+          m.addedNodes.forEach((added) => {
+            if (added.nodeType === Node.ELEMENT_NODE) {
+              const el = added as HTMLElement;
+              if (el.getAttribute('data-type') === 'code-block') {
+                queueDirtyBlock(el);
+              } else if (el.querySelector('[data-type="code-block"]')) {
+                registerCodeBlocks(el);
+              }
+            }
+          });
+        }
+      }
     });
 
     const irEl = container.querySelector('.vditor-ir');
     const wysiwygEl = container.querySelector('.vditor-wysiwyg');
-    const observeOpts = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] };
+    const observeOpts = { childList: true, subtree: true, characterData: true };
     if (irEl) observer.observe(irEl, observeOpts);
     if (wysiwygEl) observer.observe(wysiwygEl, observeOpts);
 
-    syncAllCodeBlocks();
+    registerCodeBlocks(container);
+
     let pollCount = 0;
     const hljsPoll = setInterval(() => {
       pollCount++;
       if ((window as any).hljs) {
-        syncAllCodeBlocks();
+        // Re-trigger IntersectionObserver asynchronously without querying getBoundingClientRect on all blocks
+        intersectionObserver.disconnect();
+        container.querySelectorAll<HTMLElement>('[data-type="code-block"]').forEach((blockEl) => {
+          intersectionObserver.observe(blockEl);
+        });
         clearInterval(hljsPoll);
       } else if (pollCount > 25) {
         clearInterval(hljsPoll);
@@ -170,6 +234,7 @@ export function useCodeBlockSync(
     return () => {
       clearInterval(hljsPoll);
       if (rafId !== null) cancelAnimationFrame(rafId);
+      intersectionObserver.disconnect();
       observer.disconnect();
       events.forEach(ev => container.removeEventListener(ev, handleCodeEvent, true));
       container.removeEventListener('scroll', handleCodeScroll, true);

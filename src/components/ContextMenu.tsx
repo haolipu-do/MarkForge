@@ -82,6 +82,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onExecuteCommand,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const submenuRef = useRef<HTMLDivElement>(null);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const [coords, setCoords] = useState({ left: x, top: y, flipLeft: false, flipUp: false });
   const submenuTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -125,6 +126,28 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     }
     setCoords({ left, top, flipLeft, flipUp });
   }, [isOpen, x, y, isInTable, targetLink, targetImage]);
+
+  // Clamp active submenu vertically inside the viewport so bottom items are never clipped
+  useLayoutEffect(() => {
+    const el = submenuRef.current;
+    if (!isOpen || !activeSubmenu || !el) return;
+    el.style.top = coords.flipUp ? '' : '-4px';
+    el.style.bottom = coords.flipUp ? '-4px' : '';
+    el.style.maxHeight = '';
+
+    const rect = el.getBoundingClientRect();
+    const overflowBottom = rect.bottom - (window.innerHeight - 12);
+    if (overflowBottom > 0) {
+      const maxShiftUp = Math.max(0, rect.top - 12);
+      const shift = Math.min(overflowBottom, maxShiftUp);
+      const baseTop = coords.flipUp ? el.offsetTop : -4;
+      el.style.bottom = '';
+      el.style.top = `${baseTop - shift}px`;
+    }
+    const updatedRect = el.getBoundingClientRect();
+    const availH = Math.max(160, window.innerHeight - updatedRect.top - 12);
+    el.style.maxHeight = `${Math.min(480, availH)}px`;
+  }, [isOpen, activeSubmenu, coords]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -170,6 +193,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       </button>
       {activeSubmenu === key && (
         <div
+          ref={submenuRef}
           onMouseEnter={cancelCloseSubmenu}
           onMouseLeave={closeSubmenuWithDelay}
           style={{
@@ -177,7 +201,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             [coords.flipUp ? 'bottom' : 'top']: '-4px',
             [coords.flipLeft ? 'marginRight' : 'marginLeft']: '4px',
           }}
-          className={`absolute z-50 ${panelCls} context-menu-submenu rounded-xl p-1.5 space-y-0.5 animate-in fade-in`}
+          className={`absolute z-50 ${panelCls} context-menu-submenu rounded-xl p-1.5 space-y-0.5 animate-in fade-in overflow-y-auto`}
         >
           <div className={`absolute top-0 bottom-0 ${coords.flipLeft ? '-right-3 w-4' : '-left-3 w-4'} bg-transparent pointer-events-auto`} />
           {content}
@@ -190,7 +214,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     <TooltipProvider delayDuration={250}>
       <div
         ref={menuRef}
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => {
+          if ((e.target as HTMLElement)?.closest?.('button')) {
+            e.preventDefault();
+          }
+        }}
         style={{ left: `${coords.left}px`, top: `${coords.top}px` }}
         className="fixed z-[999999] w-[265px] context-menu-popover rounded-xl p-1.5 select-none font-sans text-xs animate-in fade-in zoom-in-95 duration-100"
       >

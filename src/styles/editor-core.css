@@ -103,6 +103,13 @@ html:not(.dark) .vditor-reset th:focus {
   box-sizing: border-box !important;
 }
 
+/* Skip layout/paint of offscreen blocks in huge (300k+ char) documents */
+.vditor-wysiwyg .vditor-reset > *,
+.vditor-ir .vditor-reset > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+}
+
 .vditor-reset > p,
 .vditor-ir__node:not([data-type="code-block"]) p {
   line-height: 1.75 !important;
